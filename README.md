@@ -57,7 +57,7 @@ technického listu. Zkratku pro druh listu jde změnit/přidat v Config.ini (sek
 
 Zbytek metadat musí být zapsáno ve tvaru {klíč}:{hodnota}. Pokud řádek obsahuje pouze klíč (bez dvojtečky),
 přidělí se výchozí hodnota určená v Config.ini (sekce `[metadata]`). Prázdné řádky a řádky začínající '#' se ignorují.
-Datum se přidá automaticky. Šablony metadat jsou uloženy ve složce Šablony.
+Datum se přidá automaticky. Šablony metadat jsou uloženy ve složce `Meta_marker`.
 
 #### Příklad markerů metadat:<br/>
 `INGEST	00:02:00:00	V1	green	in	1`<br/>
