@@ -10,7 +10,7 @@ Nazev_ORIG: Law and order
 Nazev_EP_ORIG: Loco parentis
 HD
 16x9
-Stereo:
+Stereo
 A1: CZmix
 A2: CZmix
 A5: ORIGmix
