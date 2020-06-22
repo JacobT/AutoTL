@@ -165,7 +165,8 @@ class AutoTL:
 
         # zápis dat
         self.output_meta()
-        self.output_notes()
+        if len(self.notes) > 0:
+            self.output_notes()
 
         self.workbook.save(f"Output/{self.name}{config['template']['pripona tl']}")
         print(f'{self.name} ...hotovo')
@@ -197,7 +198,7 @@ class ParseTxt(AutoTL):
     def file_name(self, file_path):
         """Uložení jména souboru a kontrola kódování."""
 
-        # oddělení názvu souboru
+        # oddělení názvu souboru z cesty souboru
         file_name = os.path.split(file_path)
         file_name = os.path.splitext(file_name[1])
         file_name = file_name[0]
@@ -235,7 +236,7 @@ class ParseTxt(AutoTL):
             self.parse.append([tc, marker, comment])
 
     def parse_meta(self, comment):
-        """Parser markeru s matadaty."""
+        """Parser markeru s metadaty."""
 
         metadata = comment.split('\n')
 
@@ -261,7 +262,7 @@ class ParseTxt(AutoTL):
         # slovník pro spojování markerů
         operator_index = {}
 
-        operator_pattern = re.compile(r"^{}(\d*)".format(config['znak_rozpětí']['znak']))
+        operator_pattern = re.compile(r"^{}(\d*)".format(config['znak_spojeni']['znak']))
         for tc, marker, comment in self.parse:
             # proměnné pro spojení markerů
             operator = None
@@ -284,7 +285,7 @@ class ParseTxt(AutoTL):
             if comment in config['zkratky']:
                 comment = config['zkratky'][comment]
 
-            # uprava komentáře markeru černé
+            # úprava komentáře markeru černé
             if marker == config['markery']['cerna']:
                 try:
                     comment = config['zkratky']['cerny_marker'] + ' ' + comment
@@ -299,7 +300,7 @@ class ParseTxt(AutoTL):
             else:
                 self.notes.append([tc, marker, comment])
 
-            # uložení indexu markeru pro připojení tc při dalším výskytu operátoru
+            # uložení indexu markeru pro připojení tc
             if get_index:
                 operator_index[operator] = self.notes.index([tc, marker, comment])
 
