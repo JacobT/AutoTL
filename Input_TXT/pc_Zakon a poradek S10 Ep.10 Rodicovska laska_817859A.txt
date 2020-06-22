@@ -2,10 +2,10 @@ INGEST	00:02:00:00	V1	green	in	1
 INGEST	00:02:00:01	V1	magenta	TVB_Vystup
 ID: 817859A
 IDEC: 19/202/00157/0010
-Nazev_CZ: Zákon a poøádek
+Nazev_CZ: ZÃ¡kon a poÅ™Ã¡dek
 Serie: S10
 EP: 10
-Nazev_EP_CZ: Rodièovská láska
+Nazev_EP_CZ: RodiÄovskÃ¡ lÃ¡ska
 Nazev_ORIG: Law and order
 Nazev_EP_ORIG: Loco parentis
 HD
@@ -20,38 +20,37 @@ A8: M/E
 Poznamka: MXF 50, EBU R128
 Technik_zapis: Tschernoster
 Technik_kontrola: Tschernoster
-Zvukar: Bartos
+Zvukar: BartoÅ¡
 Stroj_kontrola: INGEST
 Kvalita_obrazu: 4
 Kvalita_zvuku: 4	1
 INGEST	00:02:00:00	V1	green	in	1
-INGEST	00:15:28:10	V1	green	šikanér?	1
-INGEST	00:31:55:05	V1	red	Vıpadek A1-A4	1
+INGEST	00:31:55:05	V1	red	VÃ½padek A1-A4	1
 INGEST	00:31:59:17	V1	red	as	1
 INGEST	00:34:59:17	V1	black	*1 2s	1
 INGEST	00:36:59:17	V1	black	*1	1
 INGEST	00:45:07:10	V1	green	zt	1
 INGEST	00:45:50:19	V1	green	out	1
-INGEST	00:31:55:15	V1	blue	Tuèné písmo	1
-INGEST	00:31:51:05	V1	white	Poznámka bez TC	1
-INGEST	00:31:15:05	V1	red	Vıpadek A1-A4	1
-INGEST	00:32:55:05	V1	red	Vıpadek A1-A4	1
-INGEST	00:41:55:05	V1	red	Vıpadek A1-A4	1
-INGEST	01:31:55:05	V1	red	Vıpadek A1-A4	1
-INGEST	10:31:55:05	V1	red	Vıpadek A1-A4	1
-INGEST	00:31:55:07	V1	red	Vıpadek A1-A4	1
-INGEST	00:31:55:25	V1	red	Vıpadek A1-A4	1
-INGEST	00:31:57:05	V1	red	Vıpadek A1-A4	1
-INGEST	00:31:75:05	V1	red	Vıpadek A1-A4	1
-INGEST	00:33:55:05	V1	red	Vıpadek A1-A4	1
-INGEST	00:51:55:05	V1	red	Vıpadek A1-A4	1
-INGEST	02:31:55:05	V1	red	Vıpadek A1-A4	1
-INGEST	20:31:55:05	V1	red	Vıpadek A1-A4	1
-INGEST	00:31:55:08	V1	red	Vıpadek A1-A4	1
-INGEST	00:31:55:35	V1	red	Vıpadek A1-A4	1
-INGEST	00:31:58:05	V1	red	Vıpadek A1-A4	1
-INGEST	00:31:85:05	V1	red	Vıpadek A1-A4	1
-INGEST	00:34:55:05	V1	red	Vıpadek A1-A4	1
-INGEST	00:61:55:05	V1	red	Vıpadek A1-A4	1
-INGEST	03:31:55:05	V1	red	Vıpadek A1-A4	1
-INGEST	30:31:55:05	V1	red	Vıpadek A1-A4	1
+INGEST	00:31:55:15	V1	blue	TuÄnÃ© pÃ­smo	1
+INGEST	00:31:51:05	V1	white	PoznÃ¡mka bez TC	1
+INGEST	00:31:15:05	V1	red	VÃ½padek A1-A4	1
+INGEST	00:32:55:05	V1	red	*2 VÃ½padek A1-A4	1
+INGEST	00:41:55:05	V1	red	*3 VÃ½padek A1-A4	1
+INGEST	01:31:55:05	V1	red	*2 VÃ½padek A1-A4	1
+INGEST	10:31:55:05	V1	red	*4 VÃ½padek A1-A4	1
+INGEST	00:31:55:07	V1	red	*4 VÃ½padek A1-A4	1
+INGEST	00:31:55:25	V1	red	*3 VÃ½padek A1-A4	1
+INGEST	00:31:57:05	V1	red	VÃ½padek A1-A4	1
+INGEST	00:31:75:05	V1	red	VÃ½padek A1-A4	1
+INGEST	00:33:55:05	V1	red	VÃ½padek A1-A4	1
+INGEST	00:51:55:05	V1	red	VÃ½padek A1-A4	1
+INGEST	02:31:55:05	V1	red	VÃ½padek A1-A4	1
+INGEST	20:31:55:05	V1	red	VÃ½padek A1-A4	1
+INGEST	00:31:55:08	V1	red	VÃ½padek A1-A4	1
+INGEST	00:31:55:35	V1	red	VÃ½padek A1-A4	1
+INGEST	00:31:58:05	V1	red	VÃ½padek A1-A4	1
+INGEST	00:31:85:05	V1	red	VÃ½padek A1-A4	1
+INGEST	00:34:55:05	V1	red	VÃ½padek A1-A4	1
+INGEST	00:61:55:05	V1	red	VÃ½padek A1-A4	1
+INGEST	03:31:55:05	V1	red	VÃ½padek A1-A4	1
+INGEST	30:31:55:05	V1	red	VÃ½padek A1-A4	1
