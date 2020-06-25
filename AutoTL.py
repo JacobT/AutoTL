@@ -21,12 +21,12 @@ class AutoTL:
     def output_meta(self):
         """Zápis metadat do technického listu."""
 
-        meta_sheet = self.workbook[self.workbook.sheetnames[0]]
-
-        for data in self.meta:
-            if data in config[self.output]:
-                address = config[self.output][data]
-                meta_sheet[address].value = self.meta[data]
+        meta_sheet = self.workbook.worksheets[0]
+        
+        for metadata in self.meta:
+            if metadata in config[self.output]:
+                address = config[self.output][metadata]
+                meta_sheet[address].value = self.meta[metadata]
 
     def create_sheet_dodatek(self, dodatek_last_row):
         """Vytvoření dodatkového listu."""
@@ -67,6 +67,8 @@ class AutoTL:
     def notes_cells(sheet, first_row, last_row, tc_column, notes_column):
         """Generátor adres pro zápis poznámek."""
 
+        # generuje čísla řádků pro zápis v rozmezí first_row - last_row
+        # poté připojí písmeno sloupce a předá výsledné adresy buňek
         for row in range(first_row, last_row + 1):
             tc_cell = sheet[tc_column + str(row)]
             note_cell = sheet[notes_column + str(row)]
@@ -75,7 +77,7 @@ class AutoTL:
     def output_notes(self):
         """Zápis poznámek do technického listu."""
 
-        notes_sheet = self.workbook[self.workbook.sheetnames[1]]
+        notes_sheet = self.workbook.worksheets[1]
 
         # proměnné fontů pro zápis
         font_red = Font(name=config['pismo']['font'], size=int(config['pismo']['velikost']),
@@ -100,12 +102,12 @@ class AutoTL:
                 except StopIteration:
                     # vytvoření dodatkového listu
                     row_index = self.notes.index([tc, marker, comment])
-                    new_last_row = len(self.notes[row_index:]) + 1  # +1 kvůli záhlaví tabulky
+                    new_last_row = len(self.notes[row_index:]) + 1  # počet zbývajících poznámek +1 kvůli záhlaví tabulky
                     new_notes_sheet = self.create_sheet_dodatek(new_last_row)
 
                     # vytvoření nového generátoru pro dodatkový list
                     address = self.notes_cells(sheet=new_notes_sheet,
-                                               first_row=2,
+                                               first_row=2, # 1. řádek je záhlaví tabulky
                                                last_row=new_last_row,
                                                tc_column='A',
                                                notes_column='B')
@@ -128,15 +130,19 @@ class AutoTL:
                     else:
                         address_tc.font = font_normal
                         address_comment.font = font_normal
-                    # zápis
+                    # zápis hodnot
                     address_tc.value = tc
                     address_comment.value = comment
         else:
+            # PRIMA_Vystup má jinou logiku zápisu než ostatní listy
+            # markery se rozdělí na poznámky a reklamace(závady) a spojí do jednoho řetězce
+            # zápis je pouze do jedné buňky poznámek a jedné buňky reklamací
+            
             # proměnné pro zápis
             poznamky = ''
             reklamace = ''
 
-            # příprava markerů pro zápis
+            # spojení markerů pro zápis
             for tc, marker, comment in self.notes:
                 if marker == config['markery']['poznamka']:
                     poznamky += comment + '\n'
@@ -151,7 +157,7 @@ class AutoTL:
             notes_sheet[config[self.output]['Reklamace']].value = reklamace
 
     def excel_output(self):
-        """Zápis a uložení technického listu."""
+        """Načtení šablony, zápis a uložení technického listu."""
 
         # ověření platného druhu technického listu
         if self.output in config['zkratky']:
@@ -160,6 +166,7 @@ class AutoTL:
             print(f'{self.name} ...CHYBA! Neplatný druh TL. - {self.output}')
             return None
 
+        # vytvoření sešitu ze šablony
         self.workbook = excel.load_workbook(f"Data/Templates/{self.output}{config['template']['pripona vzoru']}")
         self.workbook.template = False
 
@@ -168,6 +175,7 @@ class AutoTL:
         if len(self.notes) > 0:
             self.output_notes()
 
+        # uložení nového sešitu
         self.workbook.save(f"Output/{self.name}{config['template']['pripona tl']}")
         print(f'{self.name} ...hotovo')
 
@@ -205,7 +213,7 @@ class ParseTxt(AutoTL):
 
         # ověření prefixu pro určení kódování souboru
         split_name = file_name.split('_', 1)
-        if split_name[0] in config['encoding']:
+        if split_name[0] in config['encoding']: 
             self.encoding = config['encoding'][split_name[0]]
             self.name = split_name[1]
         else:
@@ -215,9 +223,10 @@ class ParseTxt(AutoTL):
     def parse_txt(self, txt_file):
         """Parser textového souboru."""
 
+        # načtení zpracovávaného souboru a rozdělení obsahu na jednotlivé markery
         with open(txt_file, encoding=self.encoding) as file:
             txt = file.read()
-        txt = txt.split("\t1\n")
+        txt = txt.split("\t1\n") # každý marker je zakončen (tab)1(konec řádku)
 
         txt_pattern = re.compile(
             r"""
@@ -229,7 +238,7 @@ class ParseTxt(AutoTL):
             """, re.VERBOSE)
 
         for line in txt:
-            if line.isspace() or not line:
+            if line.isspace() or not line: # vynechání prázdných řádků
                 continue
             line = re.sub("\t1$", "", line)  # ořez nechtěných znaků na posledním řádku
             tc, marker, comment = txt_pattern.search(line).groups()
@@ -259,16 +268,29 @@ class ParseTxt(AutoTL):
     def filter_parse(self):
         """Filtr markerů na metadata a poznámky."""
 
-        # slovník pro spojování markerů
+        # pomocný slovník pro spojování markerů
         operator_index = {}
 
+        # vzor pro ověření znaku pro spojení na začátku komentáře markeru
+        # výchozí znak je "*" následovaný libovolným číslem pro identifikaci
+        # např. "*245"
         operator_pattern = re.compile(r"^{}(\d*)".format(config['znak_spojeni']['znak']))
+                           
         for tc, marker, comment in self.parse:
-            # proměnné pro spojení markerů
+            # pomocné proměnné pro spojení markerů
             operator = None
             get_index = False
 
             # ověření operátoru pro spojení markerů
+            # při prvním výskytu operátoru:
+            # - operátor se odstraní z komentáře markeru (comment)
+            # - marker ([tc, marker, comment]) se přidá do seznamu poznámek (self.notes)
+            # - index markeru v self.notes se uloží spolu s operátorem do slovníku operator_index
+            #   ve tvaru operátor : index (klíč:hodnota)
+            # 
+            # při dalším výskytu operátoru se stejným číslem:
+            # - tc nového markeru se připojí k tc předchozího markeru se stejným operátorem
+            #   ve tvaru "{předchozí tc} - {nový tc}", např. "00:05:00:00 - 00:05:30:00"
             if operator_pattern.search(comment):
                 operator = operator_pattern.search(comment).group()
                 if operator not in operator_index:
@@ -276,28 +298,25 @@ class ParseTxt(AutoTL):
                     get_index = True
                     comment = re.sub(operator_pattern, "", comment)
                 else:
-                    # při dalším výskytu se tc připojí k předchozímu a dále se nezpracovává
+                    # při dalším výskytu se tc markeru připojí k tc předchozího markeru a dále se nezpracovává
                     self.notes[operator_index[operator]][0] = f"{self.notes[operator_index[operator]][0]} - {tc}"
                     continue
 
-            # přepis zkratky na požadovaný komentář
+            # přepis zkratky v kometáři na požadovaný komentář
             comment = comment.strip(' ')
             if comment in config['zkratky']:
                 comment = config['zkratky'][comment]
 
             # úprava komentáře markeru černé
-            if marker == config['markery']['cerna']:
-                try:
-                    comment = config['zkratky']['cerny_marker'] + ' ' + comment
-                except KeyError:
-                    pass
-
-            # filtr metadat
-            if comment in config['metadata']:
-                self.meta[comment] = tc
-            elif marker == config['markery']['metadata']:
+            if marker == config['markery']['cerna'] and 'cerny_marker' in config['zkratky']:
+                comment = config['zkratky']['cerny_marker'] + ' ' + comment
+                
+            # filtr markerů s metadaty
+            if marker == config['markery']['metadata']: # hlavní marker s metadaty
                 self.parse_meta(comment)
-            else:
+            elif comment in config['metadata']: # ostatní markery s metadaty (in, zt, out, tl, end)
+                self.meta[comment] = tc
+            else: 
                 self.notes.append([tc, marker, comment])
 
             # uložení indexu markeru pro připojení tc
@@ -419,7 +438,7 @@ class ParseTxt(AutoTL):
             if meta in config['caps_meta']:
                 self.meta[meta] = self.meta[meta].upper()
 
-        # ověření formátu obrazu, technický list pro 19:9 PB je se liší od standartního
+        # ověření formátu obrazu, technický list TVB pro 19:9 PB se liší od standartního
         if self.output == 'TVB_Vystup':
             if '16x9_pillarbox' in self.meta:
                 self.output = 'TVB_Vystup_PB'
