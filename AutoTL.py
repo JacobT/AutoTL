@@ -75,9 +75,7 @@ class ParseTxt:
 
         metadata = comment.split('\n')
 
-        # první řádek markeru s metadaty musí vždy určovat druh technického listu
-        self.output = metadata[0]
-        for meta in metadata[1:]:
+        for meta in metadata:
             # vynechání prázdných řádků a komentářů
             if meta.isspace() or not meta or meta[0] == '#':
                 continue
@@ -156,7 +154,7 @@ class ParseTxt:
             idec = re.search(r"^(\d{2})/(\d{3})/(\d{5})/(\d{4})$", self.meta["IDEC"])
             if idec:
                 self.meta["IDEC_rok"], self.meta["IDEC_kod"], \
-                self.meta["IDEC_porad"], self.meta["IDEC_ep"] = idec.groups()
+                    self.meta["IDEC_porad"], self.meta["IDEC_ep"] = idec.groups()
             else:
                 self.meta["IDEC_porad"] = config["metadata"]["IDEC"]
             self.meta.pop("IDEC")
@@ -251,6 +249,16 @@ class ParseTxt:
 
     def edit_meta(self):
         """Úprava metadat pro výstup."""
+
+        if 'Druh_TL' in self.meta:
+            self.output = self.meta['Druh_TL']
+
+        # ověření platného druhu technického listu
+        if self.output in config['zkratky']:
+            self.output = config['zkratky'][self.output]
+        else:
+            print(f'{self.name} ...CHYBA! Neplatný druh TL - {self.output}')
+            raise ImportError
 
         if self.output == 'TVB_Vstup' or self.output == 'PRIMA_Vstup':
             self.vstup_meta()
@@ -362,12 +370,12 @@ class AutoTL(ParseTxt):
                 except StopIteration:
                     # vytvoření dodatkového listu
                     row_index = self.notes.index([tc, marker, comment])
-                    new_last_row = len(self.notes[row_index:]) + 1  # počet zbývajících poznámek +1 kvůli záhlaví tabulky
+                    new_last_row = len(self.notes[row_index:]) + 1  # počet zbylých poznámek +1 kvůli záhlaví tabulky
                     new_notes_sheet = self.create_sheet_dodatek(new_last_row)
 
                     # vytvoření nového generátoru pro dodatkový list
                     address = self.notes_cells(sheet=new_notes_sheet,
-                                               first_row=2, # 1. řádek je záhlaví tabulky
+                                               first_row=2,  # 1. řádek je záhlaví tabulky
                                                last_row=new_last_row,
                                                tc_column='A',
                                                notes_column='B')
@@ -419,13 +427,6 @@ class AutoTL(ParseTxt):
     def excel_output(self):
         """Načtení šablony, zápis a uložení technického listu."""
 
-        # ověření platného druhu technického listu
-        if self.output in config['zkratky']:
-            self.output = config['zkratky'][self.output]
-        else:
-            print(f'{self.name} ...CHYBA! Neplatný druh TL. - {self.output}')
-            return None
-
         # vytvoření sešitu ze šablony
         self.workbook = excel.load_workbook(f"Data/Templates/{self.output}{config['template']['pripona vzoru']}")
         self.workbook.template = False
@@ -442,7 +443,10 @@ class AutoTL(ParseTxt):
 
 def main():
     for marker_file in glob.glob('Input_TXT/*.txt'):
-        AutoTL(marker_file)
+        try:
+            AutoTL(marker_file)
+        except ImportError:
+            pass
     input('')
 
 

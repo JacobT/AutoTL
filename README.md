@@ -46,7 +46,7 @@ Kde jdou též změnit nebo přidat alternativní zkratky.
 `tl` - začátek textless<br/>
 `end` - konec textless
 
-Metadata v hlavním markeru musí být zapsána každé na novém řádku. První řádek musí vždy obsahovat druh
+Metadata v hlavním markeru musí být zapsána každé na novém řádku. Marker musí vždy obsahovat platný druh
 technického listu. Zkratku pro druh listu jde změnit/přidat v Config.ini (sekce `[zkratky]`).
 
 #### Výchozí zkratky jsou:<br/>
