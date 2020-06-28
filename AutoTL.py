@@ -7,14 +7,274 @@ import openpyxl as excel
 from openpyxl.styles import Font, colors, Alignment, Border, Side
 
 
-class AutoTL:
+class ParseTxt:
+    """Parser markerů exportovaných z Avid Media Composeru do txt souboru."""
+
+    def __init__(self, txt_file):
+        self.name = ''
+        self.encoding = ''
+        self.file_name(txt_file)
+        self.meta = dict()
+        self.date()
+        self.notes = []
+        self.parse = []
+        self.output = ''
+        self.parse_txt(txt_file)
+        self.filter_parse()
+        self.edit_meta()
+
+    def date(self):
+        """Přidání data do metadat."""
+
+        datum = date.today()
+        self.meta["Datum"] = f'{datum.day}.{datum.month}.{datum.year}'
+
+    def file_name(self, file_path):
+        """Uložení jména souboru a kontrola kódování."""
+
+        # oddělení názvu souboru z cesty souboru
+        file_name = os.path.split(file_path)
+        file_name = os.path.splitext(file_name[1])
+        file_name = file_name[0]
+
+        # ověření prefixu pro určení kódování souboru
+        split_name = file_name.split('_', 1)
+        if split_name[0] in config['encoding']:
+            self.encoding = config['encoding'][split_name[0]]
+            self.name = split_name[1]
+        else:
+            self.encoding = config['encoding']['default']
+            self.name = file_name
+
+    def parse_txt(self, txt_file):
+        """Parser textového souboru."""
+
+        # načtení zpracovávaného souboru a rozdělení obsahu na jednotlivé markery
+        with open(txt_file, encoding=self.encoding) as file:
+            txt = file.read()
+        txt = txt.split("\t1\n")  # každý marker je zakončen (tab)1(konec řádku)
+
+        txt_pattern = re.compile(
+            r"""
+            (\d{2}:\d{2}:\d{2}:\d{2})                               # timecode 
+            \t.*\t                                                  
+            (red|green|blue|cyan|magenta|yellow|black|white)        # barva merkeru
+            \t                                                      
+            ([\s\S]*)                                               # komentář
+            """, re.VERBOSE)
+
+        for line in txt:
+            if line.isspace() or not line:  # vynechání prázdných řádků
+                continue
+            line = re.sub("\t1$", "", line)  # ořez nechtěných znaků na posledním řádku
+            tc, marker, comment = txt_pattern.search(line).groups()
+            self.parse.append([tc, marker, comment])
+
+    def parse_meta(self, comment):
+        """Parser markeru s metadaty."""
+
+        metadata = comment.split('\n')
+
+        # první řádek markeru s metadaty musí vždy určovat druh technického listu
+        self.output = metadata[0]
+        for meta in metadata[1:]:
+            # vynechání prázdných řádků a komentářů
+            if meta.isspace() or not meta or meta[0] == '#':
+                continue
+
+            meta = meta.split(':', 1)  # rozdělění řádku na klíč a hodnotu
+            meta = [item.strip(' ') for item in meta]  # ořez bílých znaků
+
+            # zápis do slovníku metadat
+            if len(meta) == 2 and meta[0] in config['metadata']:
+                self.meta[meta[0]] = meta[1]
+            elif len(meta) == 1 and meta[0] in config['metadata']:
+                self.meta[meta[0]] = config['metadata'][meta[0]]  # přidání výchozí hodnoty, pokud není zadána
+
+    def filter_parse(self):
+        """Filtr markerů na metadata a poznámky."""
+
+        # pomocný slovník pro spojování markerů
+        operator_index = {}
+
+        # vzor pro ověření znaku pro spojení na začátku komentáře markeru
+        # výchozí znak je "*" následovaný libovolným číslem pro identifikaci
+        # např. "*245"
+        operator_pattern = re.compile(r"^{}(\d*)".format(config['znak_spojeni']['znak']))
+
+        for tc, marker, comment in self.parse:
+            # pomocné proměnné pro spojení markerů
+            operator = None
+            get_index = False
+
+            # ověření operátoru pro spojení markerů
+            # při prvním výskytu operátoru:
+            # - operátor se odstraní z komentáře markeru (comment)
+            # - marker ([tc, marker, comment]) se přidá do seznamu poznámek (self.notes)
+            # - index markeru v self.notes se uloží spolu s operátorem do slovníku operator_index
+            #   ve tvaru operátor : index (klíč:hodnota)
+            #
+            # při dalším výskytu operátoru se stejným číslem:
+            # - tc nového markeru se připojí k tc předchozího markeru se stejným operátorem
+            #   ve tvaru "{předchozí tc} - {nový tc}", např. "00:05:00:00 - 00:05:30:00"
+            if operator_pattern.search(comment):
+                operator = operator_pattern.search(comment).group()
+                if operator not in operator_index:
+                    # první výskyt operátoru
+                    get_index = True
+                    comment = re.sub(operator_pattern, "", comment)
+                else:
+                    # při dalším výskytu se tc markeru připojí k tc předchozího markeru a dále se nezpracovává
+                    self.notes[operator_index[operator]][0] = f"{self.notes[operator_index[operator]][0]} - {tc}"
+                    continue
+
+            # přepis zkratky v kometáři na požadovaný komentář
+            comment = comment.strip(' ')
+            if comment in config['zkratky']:
+                comment = config['zkratky'][comment]
+
+            # úprava komentáře markeru černé
+            if marker == config['markery']['cerna'] and 'cerny_marker' in config['zkratky']:
+                comment = config['zkratky']['cerny_marker'] + ' ' + comment
+
+            # filtr markerů s metadaty
+            if marker == config['markery']['metadata']:  # hlavní marker s metadaty
+                self.parse_meta(comment)
+            elif comment in config['metadata']:  # ostatní markery s metadaty (in, zt, out, tl, end)
+                self.meta[comment] = tc
+            else:
+                self.notes.append([tc, marker, comment])
+
+            # uložení indexu markeru pro připojení tc
+            if get_index:
+                operator_index[operator] = self.notes.index([tc, marker, comment])
+
+    def idec(self):
+        """Úprava IDEC pro zápis."""
+
+        if "IDEC" in self.meta:
+            idec = re.search(r"^(\d{2})/(\d{3})/(\d{5})/(\d{4})$", self.meta["IDEC"])
+            if idec:
+                self.meta["IDEC_rok"], self.meta["IDEC_kod"], \
+                self.meta["IDEC_porad"], self.meta["IDEC_ep"] = idec.groups()
+            else:
+                self.meta["IDEC_porad"] = config["metadata"]["IDEC"]
+            self.meta.pop("IDEC")
+
+    def vstup_meta(self):
+        """Úprava metadat pro zápis do vstupních technických listů (TV Prima i TV Barrandov)."""
+
+        if "Serie" in self.meta:
+            self.meta['Nazev_ORIG'] = f"{self.meta['Nazev_ORIG']} {self.meta['Serie']}"
+            self.meta.pop("Serie")
+
+        if "EP" in self.meta:
+            if "Nazev_EP_ORIG" in self.meta:
+                self.meta['Nazev_EP_ORIG'] = f"EP.{self.meta['EP']} - {self.meta['Nazev_EP_ORIG']}"
+            else:
+                self.meta['Nazev_EP_ORIG'] = f"EP.{self.meta['EP']}"
+            self.meta.pop("EP")
+
+        if "in" in self.meta and "out" in self.meta:
+            self.meta["Stopaz_poradu"] = f"{self.meta['in']} - {self.meta['out']}"
+            if "end" in self.meta:
+                self.meta["Stopaz_celkova"] = f"{self.meta['in']} - {self.meta['end']}"
+                if "tl" in self.meta:
+                    self.meta["Stopaz_textless"] = f"{self.meta['tl']} - {self.meta['end']}"
+                    self.meta.pop("tl")
+                self.meta.pop("end")
+            else:
+                self.meta["Stopaz_celkova"] = self.meta["Stopaz_poradu"]
+                self.meta["Stopaz_textless"] = config['metadata']['tl']
+            self.meta.pop("in")
+            self.meta.pop("out")
+        else:
+            self.meta["Stopaz_poradu"] = config["metadata"]["out"]
+            self.meta["Stopaz_celkova"] = config["metadata"]["out"]
+
+    def tvb_vystup_meta(self):
+        """Úprava metadat pro zápis výstupního technického listu pro TV Barrandov."""
+
+        self.idec()
+
+        if "Serie" in self.meta:
+            self.meta['Nazev_CZ'] = f"{self.meta['Nazev_CZ']} {self.meta['Serie']}"
+            self.meta['Nazev_ORIG'] = f"{self.meta['Nazev_ORIG']} {self.meta['Serie']}"
+            self.meta.pop("Serie")
+
+        if "EP" in self.meta:
+            if "Nazev_EP_CZ" in self.meta:
+                self.meta["Nazev_EP_CZ"] = f"EP.{self.meta['EP']} - {self.meta['Nazev_EP_CZ']}"
+            else:
+                self.meta["Nazev_EP_CZ"] = f"EP.{self.meta['EP']}"
+            self.meta['Nazev_ORIG'] = f"{self.meta['Nazev_ORIG']} EP.{self.meta['EP']}"
+            self.meta.pop("EP")
+
+        if "Nazev_EP_ORIG" in self.meta:
+            self.meta['Nazev_ORIG'] = f"{self.meta['Nazev_ORIG']} - {self.meta['Nazev_EP_ORIG']}"
+            self.meta.pop("Nazev_EP_ORIG")
+
+        if "out" in self.meta:
+            self.meta["Stopaz_poradu"] = f"00:02:00:00 - {self.meta['out']}"
+            self.meta["Stopaz_celkova"] = f"00:01:45:00 - {self.meta['out']}"
+            self.meta.pop("out")
+        else:
+            self.meta["Stopaz_poradu"] = config["metadata"]["out"]
+            self.meta["Stopaz_celkova"] = config["metadata"]["out"]
+
+        if "zt" in self.meta:
+            self.meta["Stopaz_bez_ZT"] = f"00:02:00:00 - {self.meta['zt']}"
+            self.meta.pop("zt")
+        else:
+            self.meta["Stopaz_bez_ZT"] = config["metadata"]["zt"]
+
+    def prima_vystup_meta(self):
+        """Úprava metadat pro zápis výstupního technického listu pro TV Prima."""
+
+        self.idec()
+
+        if "out" in self.meta:
+            self.meta["Stopaz_poradu"] = f"00:02:00:00 - {self.meta['out']}"
+            self.meta["Duration"] = self.meta["out"][:3] + str(int(self.meta["out"][3:5]) - 2) + self.meta["out"][5:]
+            self.meta.pop("out")
+        else:
+            self.meta["Stopaz_poradu"] = config["metadata"]["out"]
+            self.meta["Duration"] = config["metadata"]["out"]
+
+        if "Kvalita_obrazu" in self.meta:
+            self.meta[f"Kvalita_obrazu_{self.meta['Kvalita_obrazu']}"] = "X"
+            self.meta.pop("Kvalita_obrazu")
+
+        if "Kvalita_zvuku" in self.meta:
+            self.meta[f"Kvalita_zvuku_{self.meta['Kvalita_zvuku']}"] = "X"
+            self.meta.pop("Kvalita_zvuku")
+
+    def edit_meta(self):
+        """Úprava metadat pro výstup."""
+
+        if self.output == 'TVB_Vstup' or self.output == 'PRIMA_Vstup':
+            self.vstup_meta()
+        elif self.output == 'TVB_Vystup':
+            self.tvb_vystup_meta()
+        elif self.output == 'PRIMA_Vystup':
+            self.prima_vystup_meta()
+
+        # úprava metadat které mají být zapsány velkými písmeny
+        for meta in self.meta:
+            if meta in config['caps_meta']:
+                self.meta[meta] = self.meta[meta].upper()
+
+        # ověření formátu obrazu, technický list TVB pro 19:9 PB se liší od standartního
+        if self.output == 'TVB_Vystup':
+            if '16x9_pillarbox' in self.meta:
+                self.output = 'TVB_Vystup_PB'
+
+
+class AutoTL(ParseTxt):
     """Vytvoří technický list ze šablony, zapíše data a uloží."""
 
-    def __init__(self, file_name, output, metadata, notes):
-        self.name = file_name
-        self.output = output
-        self.meta = metadata
-        self.notes = notes
+    def __init__(self, txt_file):
+        super().__init__(txt_file)
         self.workbook = excel.Workbook()
         self.excel_output()
 
@@ -180,273 +440,9 @@ class AutoTL:
         print(f'{self.name} ...hotovo')
 
 
-class ParseTxt(AutoTL):
-    """Parser markerů exportovaných z Avid Media Composeru do txt souboru."""
-
-    def __init__(self, txt_file):
-        self.name = ''
-        self.encoding = ''
-        self.file_name(txt_file)
-        self.meta = dict()
-        self.date()
-        self.notes = []
-        self.parse = []
-        self.output = ''
-        self.parse_txt(txt_file)
-        self.filter_parse()
-        self.edit_meta()
-        super().__init__(self.name, self.output, self.meta, self.notes)
-
-    def date(self):
-        """Přidání data do metadat."""
-
-        datum = date.today()
-        self.meta["Datum"] = f'{datum.day}.{datum.month}.{datum.year}'
-
-    def file_name(self, file_path):
-        """Uložení jména souboru a kontrola kódování."""
-
-        # oddělení názvu souboru z cesty souboru
-        file_name = os.path.split(file_path)
-        file_name = os.path.splitext(file_name[1])
-        file_name = file_name[0]
-
-        # ověření prefixu pro určení kódování souboru
-        split_name = file_name.split('_', 1)
-        if split_name[0] in config['encoding']: 
-            self.encoding = config['encoding'][split_name[0]]
-            self.name = split_name[1]
-        else:
-            self.encoding = config['encoding']['default']
-            self.name = file_name
-
-    def parse_txt(self, txt_file):
-        """Parser textového souboru."""
-
-        # načtení zpracovávaného souboru a rozdělení obsahu na jednotlivé markery
-        with open(txt_file, encoding=self.encoding) as file:
-            txt = file.read()
-        txt = txt.split("\t1\n") # každý marker je zakončen (tab)1(konec řádku)
-
-        txt_pattern = re.compile(
-            r"""
-            (\d{2}:\d{2}:\d{2}:\d{2})                               # timecode 
-            \t.*\t                                                  
-            (red|green|blue|cyan|magenta|yellow|black|white)        # barva merkeru
-            \t                                                      
-            ([\s\S]*)                                               # komentář
-            """, re.VERBOSE)
-
-        for line in txt:
-            if line.isspace() or not line: # vynechání prázdných řádků
-                continue
-            line = re.sub("\t1$", "", line)  # ořez nechtěných znaků na posledním řádku
-            tc, marker, comment = txt_pattern.search(line).groups()
-            self.parse.append([tc, marker, comment])
-
-    def parse_meta(self, comment):
-        """Parser markeru s metadaty."""
-
-        metadata = comment.split('\n')
-
-        # první řádek markeru s metadaty musí vždy určovat druh technického listu
-        self.output = metadata[0]
-        for meta in metadata[1:]:
-            # vynechání prázdných řádků a komentářů
-            if meta.isspace() or not meta or meta[0] == '#':
-                continue
-
-            meta = meta.split(':', 1)  # rozdělění řádku na klíč a hodnotu
-            meta = [item.strip(' ') for item in meta]  # ořez bílých znaků
-
-            # zápis do slovníku metadat
-            if len(meta) == 2 and meta[0] in config['metadata']:
-                self.meta[meta[0]] = meta[1]
-            elif len(meta) == 1 and meta[0] in config['metadata']:
-                self.meta[meta[0]] = config['metadata'][meta[0]]  # přidání výchozí hodnoty, pokud není zadána
-
-    def filter_parse(self):
-        """Filtr markerů na metadata a poznámky."""
-
-        # pomocný slovník pro spojování markerů
-        operator_index = {}
-
-        # vzor pro ověření znaku pro spojení na začátku komentáře markeru
-        # výchozí znak je "*" následovaný libovolným číslem pro identifikaci
-        # např. "*245"
-        operator_pattern = re.compile(r"^{}(\d*)".format(config['znak_spojeni']['znak']))
-                           
-        for tc, marker, comment in self.parse:
-            # pomocné proměnné pro spojení markerů
-            operator = None
-            get_index = False
-
-            # ověření operátoru pro spojení markerů
-            # při prvním výskytu operátoru:
-            # - operátor se odstraní z komentáře markeru (comment)
-            # - marker ([tc, marker, comment]) se přidá do seznamu poznámek (self.notes)
-            # - index markeru v self.notes se uloží spolu s operátorem do slovníku operator_index
-            #   ve tvaru operátor : index (klíč:hodnota)
-            # 
-            # při dalším výskytu operátoru se stejným číslem:
-            # - tc nového markeru se připojí k tc předchozího markeru se stejným operátorem
-            #   ve tvaru "{předchozí tc} - {nový tc}", např. "00:05:00:00 - 00:05:30:00"
-            if operator_pattern.search(comment):
-                operator = operator_pattern.search(comment).group()
-                if operator not in operator_index:
-                    # první výskyt operátoru
-                    get_index = True
-                    comment = re.sub(operator_pattern, "", comment)
-                else:
-                    # při dalším výskytu se tc markeru připojí k tc předchozího markeru a dále se nezpracovává
-                    self.notes[operator_index[operator]][0] = f"{self.notes[operator_index[operator]][0]} - {tc}"
-                    continue
-
-            # přepis zkratky v kometáři na požadovaný komentář
-            comment = comment.strip(' ')
-            if comment in config['zkratky']:
-                comment = config['zkratky'][comment]
-
-            # úprava komentáře markeru černé
-            if marker == config['markery']['cerna'] and 'cerny_marker' in config['zkratky']:
-                comment = config['zkratky']['cerny_marker'] + ' ' + comment
-                
-            # filtr markerů s metadaty
-            if marker == config['markery']['metadata']: # hlavní marker s metadaty
-                self.parse_meta(comment)
-            elif comment in config['metadata']: # ostatní markery s metadaty (in, zt, out, tl, end)
-                self.meta[comment] = tc
-            else: 
-                self.notes.append([tc, marker, comment])
-
-            # uložení indexu markeru pro připojení tc
-            if get_index:
-                operator_index[operator] = self.notes.index([tc, marker, comment])
-
-    def idec(self):
-        """Úprava IDEC pro zápis."""
-
-        if "IDEC" in self.meta:
-            idec = re.search(r"^(\d{2})/(\d{3})/(\d{5})/(\d{4})$", self.meta["IDEC"])
-            if idec:
-                self.meta["IDEC_rok"], self.meta["IDEC_kod"], \
-                    self.meta["IDEC_porad"], self.meta["IDEC_ep"] = idec.groups()
-            else:
-                self.meta["IDEC_porad"] = config["metadata"]["IDEC"]
-            self.meta.pop("IDEC")
-
-    def vstup_meta(self):
-        """Úprava metadat pro zápis do vstupních technických listů (TV Prima i TV Barrandov)."""
-
-        if "Serie" in self.meta:
-            self.meta['Nazev_ORIG'] = f"{self.meta['Nazev_ORIG']} {self.meta['Serie']}"
-            self.meta.pop("Serie")
-
-        if "EP" in self.meta:
-            if "Nazev_EP_ORIG" in self.meta:
-                self.meta['Nazev_EP_ORIG'] = f"EP.{self.meta['EP']} - {self.meta['Nazev_EP_ORIG']}"
-            else:
-                self.meta['Nazev_EP_ORIG'] = f"EP.{self.meta['EP']}"
-            self.meta.pop("EP")
-
-        if "in" in self.meta and "out" in self.meta:
-            self.meta["Stopaz_poradu"] = f"{self.meta['in']} - {self.meta['out']}"
-            if "end" in self.meta:
-                self.meta["Stopaz_celkova"] = f"{self.meta['in']} - {self.meta['end']}"
-                if "tl" in self.meta:
-                    self.meta["Stopaz_textless"] = f"{self.meta['tl']} - {self.meta['end']}"
-                    self.meta.pop("tl")
-                self.meta.pop("end")
-            else:
-                self.meta["Stopaz_celkova"] = self.meta["Stopaz_poradu"]
-                self.meta["Stopaz_textless"] = config['metadata']['tl']
-            self.meta.pop("in")
-            self.meta.pop("out")
-        else:
-            self.meta["Stopaz_poradu"] = config["metadata"]["out"]
-            self.meta["Stopaz_celkova"] = config["metadata"]["out"]
-
-    def tvb_vystup_meta(self):
-        """Úprava metadat pro zápis výstupního technického listu pro TV Barrandov."""
-
-        self.idec()
-
-        if "Serie" in self.meta:
-            self.meta['Nazev_CZ'] = f"{self.meta['Nazev_CZ']} {self.meta['Serie']}"
-            self.meta['Nazev_ORIG'] = f"{self.meta['Nazev_ORIG']} {self.meta['Serie']}"
-            self.meta.pop("Serie")
-
-        if "EP" in self.meta:
-            if "Nazev_EP_CZ" in self.meta:
-                self.meta["Nazev_EP_CZ"] = f"EP.{self.meta['EP']} - {self.meta['Nazev_EP_CZ']}"
-            else:
-                self.meta["Nazev_EP_CZ"] = f"EP.{self.meta['EP']}"
-            self.meta['Nazev_ORIG'] = f"{self.meta['Nazev_ORIG']} EP.{self.meta['EP']}"
-            self.meta.pop("EP")
-
-        if "Nazev_EP_ORIG" in self.meta:
-            self.meta['Nazev_ORIG'] = f"{self.meta['Nazev_ORIG']} - {self.meta['Nazev_EP_ORIG']}"
-            self.meta.pop("Nazev_EP_ORIG")
-
-        if "out" in self.meta:
-            self.meta["Stopaz_poradu"] = f"00:02:00:00 - {self.meta['out']}"
-            self.meta["Stopaz_celkova"] = f"00:01:45:00 - {self.meta['out']}"
-            self.meta.pop("out")
-        else:
-            self.meta["Stopaz_poradu"] = config["metadata"]["out"]
-            self.meta["Stopaz_celkova"] = config["metadata"]["out"]
-
-        if "zt" in self.meta:
-            self.meta["Stopaz_bez_ZT"] = f"00:02:00:00 - {self.meta['zt']}"
-            self.meta.pop("zt")
-        else:
-            self.meta["Stopaz_bez_ZT"] = config["metadata"]["zt"]
-
-    def prima_vystup_meta(self):
-        """Úprava metadat pro zápis výstupního technického listu pro TV Prima."""
-
-        self.idec()
-
-        if "out" in self.meta:
-            self.meta["Stopaz_poradu"] = f"00:02:00:00 - {self.meta['out']}"
-            self.meta["Duration"] = self.meta["out"][:3] + str(int(self.meta["out"][3:5]) - 2) + self.meta["out"][5:]
-            self.meta.pop("out")
-        else:
-            self.meta["Stopaz_poradu"] = config["metadata"]["out"]
-            self.meta["Duration"] = config["metadata"]["out"]
-
-        if "Kvalita_obrazu" in self.meta:
-            self.meta[f"Kvalita_obrazu_{self.meta['Kvalita_obrazu']}"] = "X"
-            self.meta.pop("Kvalita_obrazu")
-
-        if "Kvalita_zvuku" in self.meta:
-            self.meta[f"Kvalita_zvuku_{self.meta['Kvalita_zvuku']}"] = "X"
-            self.meta.pop("Kvalita_zvuku")
-
-    def edit_meta(self):
-        """Úprava metadat pro výstup."""
-
-        if self.output == 'TVB_Vstup' or self.output == 'PRIMA_Vstup':
-            self.vstup_meta()
-        elif self.output == 'TVB_Vystup':
-            self.tvb_vystup_meta()
-        elif self.output == 'PRIMA_Vystup':
-            self.prima_vystup_meta()
-
-        # úprava metadat které mají být zapsány velkými písmeny
-        for meta in self.meta:
-            if meta in config['caps_meta']:
-                self.meta[meta] = self.meta[meta].upper()
-
-        # ověření formátu obrazu, technický list TVB pro 19:9 PB se liší od standartního
-        if self.output == 'TVB_Vystup':
-            if '16x9_pillarbox' in self.meta:
-                self.output = 'TVB_Vystup_PB'
-
-
 def main():
     for marker_file in glob.glob('Input_TXT/*.txt'):
-        ParseTxt(marker_file)
+        AutoTL(marker_file)
     input('')
 
 
