@@ -1,5 +1,5 @@
 INGEST	00:02:00:00	V1	green	in	1
-INGEST	00:02:00:01	V1	magenta	TVB_Vystup
+INGEST	00:02:00:01	V1	magenta	Druh_TL: TVB_Vystup
 ID: 817859A
 IDEC: 19/202/00157/0010
 Nazev_CZ: Zákon a pořádek
@@ -33,7 +33,7 @@ INGEST	00:45:07:10	V1	green	zt	1
 INGEST	00:45:50:19	V1	green	out	1
 INGEST	00:31:55:15	V1	blue	Tučné písmo	1
 INGEST	00:31:51:05	V1	white	Poznámka bez TC	1
-INGEST	00:31:15:05	V1	red	Výpadek A1-A4	1
+INGEST	00:31:15:05	V1	green	Normální písmo	1
 INGEST	00:32:55:05	V1	red	*2 Výpadek A1-A4	1
 INGEST	00:41:55:05	V1	red	*3 Výpadek A1-A4	1
 INGEST	01:31:55:05	V1	red	*2 Výpadek A1-A4	1

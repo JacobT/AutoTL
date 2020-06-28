@@ -7,172 +7,7 @@ import openpyxl as excel
 from openpyxl.styles import Font, colors, Alignment, Border, Side
 
 
-class AutoTL:
-    """Vytvoří technický list ze šablony, zapíše data a uloží."""
-
-    def __init__(self, file_name, output, metadata, notes):
-        self.name = file_name
-        self.output = output
-        self.meta = metadata
-        self.notes = notes
-        self.workbook = excel.Workbook()
-        self.excel_output()
-
-    def output_meta(self):
-        """Zápis metadat do technického listu."""
-
-        meta_sheet = self.workbook[self.workbook.sheetnames[0]]
-
-        for data in self.meta:
-            if data in config[self.output]:
-                address = config[self.output][data]
-                meta_sheet[address].value = self.meta[data]
-
-    def create_sheet_dodatek(self, dodatek_last_row):
-        """Vytvoření dodatkového listu."""
-
-        notes_sheet_dodatek = self.workbook.create_sheet(title='Dodatek TL')
-
-        # proměnné obraničení buněk
-        thick = Side(border_style="medium", color="000000")
-        thin = Side(border_style="thin", color="000000")
-
-        # nastavení šířky sloupců
-        notes_sheet_dodatek.column_dimensions['A'].width = '30'
-        notes_sheet_dodatek.column_dimensions['B'].width = '70'
-
-        # nastavení výšky řádků, formátování textu a ohraničení buněk
-        for cell in range(1, dodatek_last_row + 1):
-            notes_sheet_dodatek.row_dimensions[cell].height = 25
-            cell = str(cell)
-            notes_sheet_dodatek[f'A{cell}'].alignment = Alignment(horizontal="center", vertical="center")
-            notes_sheet_dodatek[f'B{cell}'].alignment = Alignment(horizontal="left", vertical="center")
-            notes_sheet_dodatek[f'A{cell}'].border = Border(top=thin, left=thick, right=thick, bottom=thin)
-            notes_sheet_dodatek[f'B{cell}'].border = Border(top=thin, right=thick, bottom=thin)
-
-        # záhlaví
-        notes_sheet_dodatek.merge_cells('A1:B1')
-        notes_sheet_dodatek['A1'].font = Font(name=config['pismo']['font'],
-                                              size=int(config['pismo']['velikost']) * 1.5,
-                                              bold=True, color=colors.BLACK)
-        notes_sheet_dodatek['A1'].border = Border(top=thick, left=thick, right=thick, bottom=thick)
-        notes_sheet_dodatek['A1'].value = 'Dodatek TL'
-
-        # ohraničení posledního řádku
-        notes_sheet_dodatek[f'A{str(dodatek_last_row)}'].border = Border(left=thick, right=thick, bottom=thick)
-        notes_sheet_dodatek[f'B{str(dodatek_last_row)}'].border = Border(right=thick, bottom=thick)
-        return notes_sheet_dodatek
-
-    @staticmethod
-    def notes_cells(sheet, first_row, last_row, tc_column, notes_column):
-        """Generátor adres pro zápis poznámek."""
-
-        for row in range(first_row, last_row + 1):
-            tc_cell = sheet[tc_column + str(row)]
-            note_cell = sheet[notes_column + str(row)]
-            yield tc_cell, note_cell
-
-    def output_notes(self):
-        """Zápis poznámek do technického listu."""
-
-        notes_sheet = self.workbook[self.workbook.sheetnames[1]]
-
-        # proměnné fontů pro zápis
-        font_red = Font(name=config['pismo']['font'], size=int(config['pismo']['velikost']),
-                        bold=True, color=colors.RED)
-        font_normal = Font(name=config['pismo']['font'], size=int(config['pismo']['velikost']),
-                           bold=False, color=colors.BLACK)
-        font_bold = Font(name=config['pismo']['font'], size=int(config['pismo']['velikost']),
-                         bold=True, color=colors.BLACK)
-
-        if self.output != 'PRIMA_Vystup':
-
-            # generátor adres
-            address = self.notes_cells(sheet=notes_sheet,
-                                       first_row=int(config[self.output]['Prvni_radek_poznamek']),
-                                       last_row=int(config[self.output]['Posledni_radek_poznamek']),
-                                       tc_column=config[self.output]['Sloupec_timecode'],
-                                       notes_column=config[self.output]['Sloupec_poznamek'])
-
-            for tc, marker, comment in self.notes:
-                try:
-                    address_tc, address_comment = next(address)
-                except StopIteration:
-                    # vytvoření dodatkového listu
-                    row_index = self.notes.index([tc, marker, comment])
-                    new_last_row = len(self.notes[row_index:]) + 1  # +1 kvůli záhlaví tabulky
-                    new_notes_sheet = self.create_sheet_dodatek(new_last_row)
-
-                    # vytvoření nového generátoru pro dodatkový list
-                    address = self.notes_cells(sheet=new_notes_sheet,
-                                               first_row=2,
-                                               last_row=new_last_row,
-                                               tc_column='A',
-                                               notes_column='B')
-
-                    address_tc, address_comment = next(address)
-
-                # zápis poznámek
-                if marker == config['markery']['poznamka']:
-                    # zápis komentáře bez timecodu
-                    address_comment.font = font_bold
-                    address_comment.value = comment
-                else:
-                    # určení fontu podle barvy markeru
-                    if marker == config['markery']['cervena']:
-                        address_tc.font = font_red
-                        address_comment.font = font_red
-                    elif marker == config['markery']['cerna'] or marker == config['markery']['tucne pismo']:
-                        address_tc.font = font_bold
-                        address_comment.font = font_bold
-                    else:
-                        address_tc.font = font_normal
-                        address_comment.font = font_normal
-                    # zápis
-                    address_tc.value = tc
-                    address_comment.value = comment
-        else:
-            # proměnné pro zápis
-            poznamky = ''
-            reklamace = ''
-
-            # příprava markerů pro zápis
-            for tc, marker, comment in self.notes:
-                if marker == config['markery']['poznamka']:
-                    poznamky += comment + '\n'
-                else:
-                    reklamace += f'{tc} - {comment}' + '\n'
-
-            # nastavení fontu a zápis
-            notes_sheet[config[self.output]['Poznamky']].font = font_bold
-            notes_sheet[config[self.output]['Poznamky']].value = poznamky
-
-            notes_sheet[config[self.output]['Reklamace']].font = font_red
-            notes_sheet[config[self.output]['Reklamace']].value = reklamace
-
-    def excel_output(self):
-        """Zápis a uložení technického listu."""
-
-        # ověření platného druhu technického listu
-        if self.output in config['zkratky']:
-            self.output = config['zkratky'][self.output]
-        else:
-            print(f'{self.name} ...CHYBA! Neplatný druh TL. - {self.output}')
-            return None
-
-        self.workbook = excel.load_workbook(f"Data/Templates/{self.output}{config['template']['pripona vzoru']}")
-        self.workbook.template = False
-
-        # zápis dat
-        self.output_meta()
-        if len(self.notes) > 0:
-            self.output_notes()
-
-        self.workbook.save(f"Output/{self.name}{config['template']['pripona tl']}")
-        print(f'{self.name} ...hotovo')
-
-
-class ParseTxt(AutoTL):
+class ParseTxt:
     """Parser markerů exportovaných z Avid Media Composeru do txt souboru."""
 
     def __init__(self, txt_file):
@@ -187,7 +22,6 @@ class ParseTxt(AutoTL):
         self.parse_txt(txt_file)
         self.filter_parse()
         self.edit_meta()
-        super().__init__(self.name, self.output, self.meta, self.notes)
 
     def date(self):
         """Přidání data do metadat."""
@@ -215,9 +49,10 @@ class ParseTxt(AutoTL):
     def parse_txt(self, txt_file):
         """Parser textového souboru."""
 
+        # načtení zpracovávaného souboru a rozdělení obsahu na jednotlivé markery
         with open(txt_file, encoding=self.encoding) as file:
             txt = file.read()
-        txt = txt.split("\t1\n")
+        txt = txt.split("\t1\n")  # každý marker je zakončen (tab)1(konec řádku)
 
         txt_pattern = re.compile(
             r"""
@@ -229,7 +64,7 @@ class ParseTxt(AutoTL):
             """, re.VERBOSE)
 
         for line in txt:
-            if line.isspace() or not line:
+            if line.isspace() or not line:  # vynechání prázdných řádků
                 continue
             line = re.sub("\t1$", "", line)  # ořez nechtěných znaků na posledním řádku
             tc, marker, comment = txt_pattern.search(line).groups()
@@ -240,9 +75,7 @@ class ParseTxt(AutoTL):
 
         metadata = comment.split('\n')
 
-        # první řádek markeru s metadaty musí vždy určovat druh technického listu
-        self.output = metadata[0]
-        for meta in metadata[1:]:
+        for meta in metadata:
             # vynechání prázdných řádků a komentářů
             if meta.isspace() or not meta or meta[0] == '#':
                 continue
@@ -259,16 +92,29 @@ class ParseTxt(AutoTL):
     def filter_parse(self):
         """Filtr markerů na metadata a poznámky."""
 
-        # slovník pro spojování markerů
+        # pomocný slovník pro spojování markerů
         operator_index = {}
 
+        # vzor pro ověření znaku pro spojení na začátku komentáře markeru
+        # výchozí znak je "*" následovaný libovolným číslem pro identifikaci
+        # např. "*245"
         operator_pattern = re.compile(r"^{}(\d*)".format(config['znak_spojeni']['znak']))
+
         for tc, marker, comment in self.parse:
-            # proměnné pro spojení markerů
+            # pomocné proměnné pro spojení markerů
             operator = None
             get_index = False
 
             # ověření operátoru pro spojení markerů
+            # při prvním výskytu operátoru:
+            # - operátor se odstraní z komentáře markeru (comment)
+            # - marker ([tc, marker, comment]) se přidá do seznamu poznámek (self.notes)
+            # - index markeru v self.notes se uloží spolu s operátorem do slovníku operator_index
+            #   ve tvaru operátor : index (klíč:hodnota)
+            #
+            # při dalším výskytu operátoru se stejným číslem:
+            # - tc nového markeru se připojí k tc předchozího markeru se stejným operátorem
+            #   ve tvaru "{předchozí tc} - {nový tc}", např. "00:05:00:00 - 00:05:30:00"
             if operator_pattern.search(comment):
                 operator = operator_pattern.search(comment).group()
                 if operator not in operator_index:
@@ -276,27 +122,24 @@ class ParseTxt(AutoTL):
                     get_index = True
                     comment = re.sub(operator_pattern, "", comment)
                 else:
-                    # při dalším výskytu se tc připojí k předchozímu a dále se nezpracovává
+                    # při dalším výskytu se tc markeru připojí k tc předchozího markeru a dále se nezpracovává
                     self.notes[operator_index[operator]][0] = f"{self.notes[operator_index[operator]][0]} - {tc}"
                     continue
 
-            # přepis zkratky na požadovaný komentář
+            # přepis zkratky v kometáři na požadovaný komentář
             comment = comment.strip(' ')
             if comment in config['zkratky']:
                 comment = config['zkratky'][comment]
 
             # úprava komentáře markeru černé
-            if marker == config['markery']['cerna']:
-                try:
-                    comment = config['zkratky']['cerny_marker'] + ' ' + comment
-                except KeyError:
-                    pass
+            if marker == config['markery']['cerna'] and 'cerny_marker' in config['zkratky']:
+                comment = config['zkratky']['cerny_marker'] + ' ' + comment
 
-            # filtr metadat
-            if comment in config['metadata']:
-                self.meta[comment] = tc
-            elif marker == config['markery']['metadata']:
+            # filtr markerů s metadaty
+            if marker == config['markery']['metadata']:  # hlavní marker s metadaty
                 self.parse_meta(comment)
+            elif comment in config['metadata']:  # ostatní markery s metadaty (in, zt, out, tl, end)
+                self.meta[comment] = tc
             else:
                 self.notes.append([tc, marker, comment])
 
@@ -407,6 +250,16 @@ class ParseTxt(AutoTL):
     def edit_meta(self):
         """Úprava metadat pro výstup."""
 
+        if 'Druh_TL' in self.meta:
+            self.output = self.meta['Druh_TL']
+
+        # ověření platného druhu technického listu
+        if self.output in config['zkratky']:
+            self.output = config['zkratky'][self.output]
+        else:
+            print(f'{self.name} ...CHYBA! Neplatný druh TL - {self.output}')
+            raise ImportError
+
         if self.output == 'TVB_Vstup' or self.output == 'PRIMA_Vstup':
             self.vstup_meta()
         elif self.output == 'TVB_Vystup':
@@ -419,15 +272,181 @@ class ParseTxt(AutoTL):
             if meta in config['caps_meta']:
                 self.meta[meta] = self.meta[meta].upper()
 
-        # ověření formátu obrazu, technický list pro 19:9 PB je se liší od standartního
+        # ověření formátu obrazu, technický list TVB pro 19:9 PB se liší od standartního
         if self.output == 'TVB_Vystup':
             if '16x9_pillarbox' in self.meta:
                 self.output = 'TVB_Vystup_PB'
 
 
+class AutoTL(ParseTxt):
+    """Vytvoří technický list ze šablony, zapíše data a uloží."""
+
+    def __init__(self, txt_file):
+        super().__init__(txt_file)
+        self.workbook = excel.Workbook()
+        self.excel_output()
+
+    def output_meta(self):
+        """Zápis metadat do technického listu."""
+
+        meta_sheet = self.workbook.worksheets[0]
+        
+        for metadata in self.meta:
+            if metadata in config[self.output]:
+                address = config[self.output][metadata]
+                meta_sheet[address].value = self.meta[metadata]
+
+    def create_sheet_dodatek(self, dodatek_last_row):
+        """Vytvoření dodatkového listu."""
+
+        notes_sheet_dodatek = self.workbook.create_sheet(title='Dodatek TL')
+
+        # proměnné obraničení buněk
+        thick = Side(border_style="medium", color="000000")
+        thin = Side(border_style="thin", color="000000")
+
+        # nastavení šířky sloupců
+        notes_sheet_dodatek.column_dimensions['A'].width = '30'
+        notes_sheet_dodatek.column_dimensions['B'].width = '70'
+
+        # nastavení výšky řádků, formátování textu a ohraničení buněk
+        for cell in range(1, dodatek_last_row + 1):
+            notes_sheet_dodatek.row_dimensions[cell].height = 25
+            cell = str(cell)
+            notes_sheet_dodatek[f'A{cell}'].alignment = Alignment(horizontal="center", vertical="center")
+            notes_sheet_dodatek[f'B{cell}'].alignment = Alignment(horizontal="left", vertical="center")
+            notes_sheet_dodatek[f'A{cell}'].border = Border(top=thin, left=thick, right=thick, bottom=thin)
+            notes_sheet_dodatek[f'B{cell}'].border = Border(top=thin, right=thick, bottom=thin)
+
+        # záhlaví
+        notes_sheet_dodatek.merge_cells('A1:B1')
+        notes_sheet_dodatek['A1'].font = Font(name=config['pismo']['font'],
+                                              size=int(config['pismo']['velikost']) * 1.5,
+                                              bold=True, color=colors.BLACK)
+        notes_sheet_dodatek['A1'].border = Border(top=thick, left=thick, right=thick, bottom=thick)
+        notes_sheet_dodatek['A1'].value = 'Dodatek TL'
+
+        # ohraničení posledního řádku
+        notes_sheet_dodatek[f'A{str(dodatek_last_row)}'].border = Border(left=thick, right=thick, bottom=thick)
+        notes_sheet_dodatek[f'B{str(dodatek_last_row)}'].border = Border(right=thick, bottom=thick)
+        return notes_sheet_dodatek
+
+    @staticmethod
+    def notes_cells(sheet, first_row, last_row, tc_column, notes_column):
+        """Generátor adres pro zápis poznámek."""
+
+        # generuje čísla řádků pro zápis v rozmezí first_row - last_row
+        # poté připojí písmeno sloupce a předá výsledné adresy buňek
+        for row in range(first_row, last_row + 1):
+            tc_cell = sheet[tc_column + str(row)]
+            note_cell = sheet[notes_column + str(row)]
+            yield tc_cell, note_cell
+
+    def output_notes(self):
+        """Zápis poznámek do technického listu."""
+
+        notes_sheet = self.workbook.worksheets[1]
+
+        # proměnné fontů pro zápis
+        font_red = Font(name=config['pismo']['font'], size=int(config['pismo']['velikost']),
+                        bold=True, color=colors.RED)
+        font_normal = Font(name=config['pismo']['font'], size=int(config['pismo']['velikost']),
+                           bold=False, color=colors.BLACK)
+        font_bold = Font(name=config['pismo']['font'], size=int(config['pismo']['velikost']),
+                         bold=True, color=colors.BLACK)
+
+        if self.output != 'PRIMA_Vystup':
+
+            # generátor adres
+            address = self.notes_cells(sheet=notes_sheet,
+                                       first_row=int(config[self.output]['Prvni_radek_poznamek']),
+                                       last_row=int(config[self.output]['Posledni_radek_poznamek']),
+                                       tc_column=config[self.output]['Sloupec_timecode'],
+                                       notes_column=config[self.output]['Sloupec_poznamek'])
+
+            for tc, marker, comment in self.notes:
+                try:
+                    address_tc, address_comment = next(address)
+                except StopIteration:
+                    # vytvoření dodatkového listu
+                    row_index = self.notes.index([tc, marker, comment])
+                    new_last_row = len(self.notes[row_index:]) + 1  # počet zbylých poznámek +1 kvůli záhlaví tabulky
+                    new_notes_sheet = self.create_sheet_dodatek(new_last_row)
+
+                    # vytvoření nového generátoru pro dodatkový list
+                    address = self.notes_cells(sheet=new_notes_sheet,
+                                               first_row=2,  # 1. řádek je záhlaví tabulky
+                                               last_row=new_last_row,
+                                               tc_column='A',
+                                               notes_column='B')
+
+                    address_tc, address_comment = next(address)
+
+                # zápis poznámek
+                if marker == config['markery']['poznamka']:
+                    # zápis komentáře bez timecodu
+                    address_comment.font = font_bold
+                    address_comment.value = comment
+                else:
+                    # určení fontu podle barvy markeru
+                    if marker == config['markery']['cervena']:
+                        address_tc.font = font_red
+                        address_comment.font = font_red
+                    elif marker == config['markery']['cerna'] or marker == config['markery']['tucne pismo']:
+                        address_tc.font = font_bold
+                        address_comment.font = font_bold
+                    else:
+                        address_tc.font = font_normal
+                        address_comment.font = font_normal
+                    # zápis hodnot
+                    address_tc.value = tc
+                    address_comment.value = comment
+        else:
+            # PRIMA_Vystup má jinou logiku zápisu než ostatní listy
+            # markery se rozdělí na poznámky a reklamace(závady) a spojí do jednoho řetězce
+            # zápis je pouze do jedné buňky poznámek a jedné buňky reklamací
+            
+            # proměnné pro zápis
+            poznamky = ''
+            reklamace = ''
+
+            # spojení markerů pro zápis
+            for tc, marker, comment in self.notes:
+                if marker == config['markery']['poznamka']:
+                    poznamky += comment + '\n'
+                else:
+                    reklamace += f'{tc} - {comment}' + '\n'
+
+            # nastavení fontu a zápis
+            notes_sheet[config[self.output]['Poznamky']].font = font_bold
+            notes_sheet[config[self.output]['Poznamky']].value = poznamky
+
+            notes_sheet[config[self.output]['Reklamace']].font = font_red
+            notes_sheet[config[self.output]['Reklamace']].value = reklamace
+
+    def excel_output(self):
+        """Načtení šablony, zápis a uložení technického listu."""
+
+        # vytvoření sešitu ze šablony
+        self.workbook = excel.load_workbook(f"Data/Templates/{self.output}{config['template']['pripona vzoru']}")
+        self.workbook.template = False
+
+        # zápis dat
+        self.output_meta()
+        if len(self.notes) > 0:
+            self.output_notes()
+
+        # uložení nového sešitu
+        self.workbook.save(f"Output/{self.name}{config['template']['pripona tl']}")
+        print(f'{self.name} ...hotovo')
+
+
 def main():
     for marker_file in glob.glob('Input_TXT/*.txt'):
-        ParseTxt(marker_file)
+        try:
+            AutoTL(marker_file)
+        except ImportError:
+            pass
     input('')
 
 
