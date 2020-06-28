@@ -7,29 +7,28 @@ import openpyxl as excel
 from openpyxl.styles import Font, colors, Alignment, Border, Side
 
 
-class ParseTxt:
+class ImportTxt:
     """Parser markerů exportovaných z Avid Media Composeru do txt souboru."""
 
     def __init__(self, txt_file):
-        self.name = ''
         self.encoding = ''
-        self.file_name(txt_file)
+        self._file_name(txt_file)
         self.meta = dict()
-        self.date()
+        self._date()
         self.notes = []
         self.parse = []
         self.output = ''
-        self.parse_txt(txt_file)
-        self.filter_parse()
-        self.edit_meta()
+        self._parse_txt(txt_file)
+        self._filter_parse()
+        self._edit_meta()
 
-    def date(self):
+    def _date(self):
         """Přidání data do metadat."""
 
         datum = date.today()
         self.meta["Datum"] = f'{datum.day}.{datum.month}.{datum.year}'
 
-    def file_name(self, file_path):
+    def _file_name(self, file_path):
         """Uložení jména souboru a kontrola kódování."""
 
         # oddělení názvu souboru z cesty souboru
@@ -46,7 +45,7 @@ class ParseTxt:
             self.encoding = config['encoding']['default']
             self.name = file_name
 
-    def parse_txt(self, txt_file):
+    def _parse_txt(self, txt_file):
         """Parser textového souboru."""
 
         # načtení zpracovávaného souboru a rozdělení obsahu na jednotlivé markery
@@ -70,7 +69,7 @@ class ParseTxt:
             tc, marker, comment = txt_pattern.search(line).groups()
             self.parse.append([tc, marker, comment])
 
-    def parse_meta(self, comment):
+    def _parse_meta(self, comment):
         """Parser markeru s metadaty."""
 
         metadata = comment.split('\n')
@@ -89,7 +88,7 @@ class ParseTxt:
             elif len(meta) == 1 and meta[0] in config['metadata']:
                 self.meta[meta[0]] = config['metadata'][meta[0]]  # přidání výchozí hodnoty, pokud není zadána
 
-    def filter_parse(self):
+    def _filter_parse(self):
         """Filtr markerů na metadata a poznámky."""
 
         # pomocný slovník pro spojování markerů
@@ -137,7 +136,7 @@ class ParseTxt:
 
             # filtr markerů s metadaty
             if marker == config['markery']['metadata']:  # hlavní marker s metadaty
-                self.parse_meta(comment)
+                self._parse_meta(comment)
             elif comment in config['metadata']:  # ostatní markery s metadaty (in, zt, out, tl, end)
                 self.meta[comment] = tc
             else:
@@ -147,7 +146,7 @@ class ParseTxt:
             if get_index:
                 operator_index[operator] = self.notes.index([tc, marker, comment])
 
-    def idec(self):
+    def _idec(self):
         """Úprava IDEC pro zápis."""
 
         if "IDEC" in self.meta:
@@ -159,7 +158,7 @@ class ParseTxt:
                 self.meta["IDEC_porad"] = config["metadata"]["IDEC"]
             self.meta.pop("IDEC")
 
-    def vstup_meta(self):
+    def _vstup_meta(self):
         """Úprava metadat pro zápis do vstupních technických listů (TV Prima i TV Barrandov)."""
 
         if "Serie" in self.meta:
@@ -190,10 +189,10 @@ class ParseTxt:
             self.meta["Stopaz_poradu"] = config["metadata"]["out"]
             self.meta["Stopaz_celkova"] = config["metadata"]["out"]
 
-    def tvb_vystup_meta(self):
+    def _tvb_vystup_meta(self):
         """Úprava metadat pro zápis výstupního technického listu pro TV Barrandov."""
 
-        self.idec()
+        self._idec()
 
         if "Serie" in self.meta:
             self.meta['Nazev_CZ'] = f"{self.meta['Nazev_CZ']} {self.meta['Serie']}"
@@ -226,10 +225,10 @@ class ParseTxt:
         else:
             self.meta["Stopaz_bez_ZT"] = config["metadata"]["zt"]
 
-    def prima_vystup_meta(self):
+    def _prima_vystup_meta(self):
         """Úprava metadat pro zápis výstupního technického listu pro TV Prima."""
 
-        self.idec()
+        self._idec()
 
         if "out" in self.meta:
             self.meta["Stopaz_poradu"] = f"00:02:00:00 - {self.meta['out']}"
@@ -247,7 +246,7 @@ class ParseTxt:
             self.meta[f"Kvalita_zvuku_{self.meta['Kvalita_zvuku']}"] = "X"
             self.meta.pop("Kvalita_zvuku")
 
-    def edit_meta(self):
+    def _edit_meta(self):
         """Úprava metadat pro výstup."""
 
         if 'Druh_TL' in self.meta:
@@ -257,15 +256,14 @@ class ParseTxt:
         if self.output in config['zkratky']:
             self.output = config['zkratky'][self.output]
         else:
-            print(f'{self.name} ...CHYBA! Neplatný druh TL - {self.output}')
             raise ImportError
 
         if self.output == 'TVB_Vstup' or self.output == 'PRIMA_Vstup':
-            self.vstup_meta()
+            self._vstup_meta()
         elif self.output == 'TVB_Vystup':
-            self.tvb_vystup_meta()
+            self._tvb_vystup_meta()
         elif self.output == 'PRIMA_Vystup':
-            self.prima_vystup_meta()
+            self._prima_vystup_meta()
 
         # úprava metadat které mají být zapsány velkými písmeny
         for meta in self.meta:
@@ -278,15 +276,18 @@ class ParseTxt:
                 self.output = 'TVB_Vystup_PB'
 
 
-class AutoTL(ParseTxt):
+class ExportExcel:
     """Vytvoří technický list ze šablony, zapíše data a uloží."""
 
-    def __init__(self, txt_file):
-        super().__init__(txt_file)
+    def __init__(self, name, output, meta, notes):
+        self.name = name
+        self.output = output
+        self.meta = meta
+        self.notes = notes
         self.workbook = excel.Workbook()
-        self.excel_output()
+        self._excel_output()
 
-    def output_meta(self):
+    def _output_meta(self):
         """Zápis metadat do technického listu."""
 
         meta_sheet = self.workbook.worksheets[0]
@@ -296,7 +297,7 @@ class AutoTL(ParseTxt):
                 address = config[self.output][metadata]
                 meta_sheet[address].value = self.meta[metadata]
 
-    def create_sheet_dodatek(self, dodatek_last_row):
+    def _create_sheet_dodatek(self, dodatek_last_row):
         """Vytvoření dodatkového listu."""
 
         notes_sheet_dodatek = self.workbook.create_sheet(title='Dodatek TL')
@@ -332,7 +333,7 @@ class AutoTL(ParseTxt):
         return notes_sheet_dodatek
 
     @staticmethod
-    def notes_cells(sheet, first_row, last_row, tc_column, notes_column):
+    def _notes_cells(sheet, first_row, last_row, tc_column, notes_column):
         """Generátor adres pro zápis poznámek."""
 
         # generuje čísla řádků pro zápis v rozmezí first_row - last_row
@@ -342,7 +343,7 @@ class AutoTL(ParseTxt):
             note_cell = sheet[notes_column + str(row)]
             yield tc_cell, note_cell
 
-    def output_notes(self):
+    def _output_notes(self):
         """Zápis poznámek do technického listu."""
 
         notes_sheet = self.workbook.worksheets[1]
@@ -358,11 +359,11 @@ class AutoTL(ParseTxt):
         if self.output != 'PRIMA_Vystup':
 
             # generátor adres
-            address = self.notes_cells(sheet=notes_sheet,
-                                       first_row=int(config[self.output]['Prvni_radek_poznamek']),
-                                       last_row=int(config[self.output]['Posledni_radek_poznamek']),
-                                       tc_column=config[self.output]['Sloupec_timecode'],
-                                       notes_column=config[self.output]['Sloupec_poznamek'])
+            address = self._notes_cells(sheet=notes_sheet,
+                                        first_row=int(config[self.output]['Prvni_radek_poznamek']),
+                                        last_row=int(config[self.output]['Posledni_radek_poznamek']),
+                                        tc_column=config[self.output]['Sloupec_timecode'],
+                                        notes_column=config[self.output]['Sloupec_poznamek'])
 
             for tc, marker, comment in self.notes:
                 try:
@@ -371,14 +372,14 @@ class AutoTL(ParseTxt):
                     # vytvoření dodatkového listu
                     row_index = self.notes.index([tc, marker, comment])
                     new_last_row = len(self.notes[row_index:]) + 1  # počet zbylých poznámek +1 kvůli záhlaví tabulky
-                    new_notes_sheet = self.create_sheet_dodatek(new_last_row)
+                    new_notes_sheet = self._create_sheet_dodatek(new_last_row)
 
                     # vytvoření nového generátoru pro dodatkový list
-                    address = self.notes_cells(sheet=new_notes_sheet,
-                                               first_row=2,  # 1. řádek je záhlaví tabulky
-                                               last_row=new_last_row,
-                                               tc_column='A',
-                                               notes_column='B')
+                    address = self._notes_cells(sheet=new_notes_sheet,
+                                                first_row=2,  # 1. řádek je záhlaví tabulky
+                                                last_row=new_last_row,
+                                                tc_column='A',
+                                                notes_column='B')
 
                     address_tc, address_comment = next(address)
 
@@ -424,7 +425,7 @@ class AutoTL(ParseTxt):
             notes_sheet[config[self.output]['Reklamace']].font = font_red
             notes_sheet[config[self.output]['Reklamace']].value = reklamace
 
-    def excel_output(self):
+    def _excel_output(self):
         """Načtení šablony, zápis a uložení technického listu."""
 
         # vytvoření sešitu ze šablony
@@ -432,20 +433,44 @@ class AutoTL(ParseTxt):
         self.workbook.template = False
 
         # zápis dat
-        self.output_meta()
+        self._output_meta()
         if len(self.notes) > 0:
-            self.output_notes()
+            self._output_notes()
 
         # uložení nového sešitu
         self.workbook.save(f"Output/{self.name}{config['template']['pripona tl']}")
         print(f'{self.name} ...hotovo')
 
 
+class AutoTL:
+
+    def __init__(self):
+        self.name = ''
+        self.output = ''
+        self.meta = {}
+        self.notes = []
+
+    def import_txt(self, txt_file):
+
+        tl_data = ImportTxt(txt_file)
+
+        self.meta = tl_data.meta
+        self.notes = tl_data.notes
+        self.output = self.meta['Druh_TL']
+        self.name = tl_data.name  # TODO: Složení jména z metadat
+
+    def export_excel(self):
+        ExportExcel(self.name, self.output, self.meta, self.notes)
+
+
 def main():
     for marker_file in glob.glob('Input_TXT/*.txt'):
+        tl = AutoTL()
         try:
-            AutoTL(marker_file)
+            tl.import_txt(marker_file)
+            tl.export_excel()
         except ImportError:
+            print(f'{marker_file} ...CHYBA! Neplatný druh TL')
             pass
     input('')
 
