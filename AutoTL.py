@@ -456,7 +456,7 @@ class AutoTL:
 
         self.meta = tl_data.meta
         self.notes = tl_data.notes
-        self.output = self.meta['Druh_TL']
+        self.output = tl_data.output
         self.name = tl_data.name  # TODO: Složení jména z metadat
 
     def export_excel(self):
