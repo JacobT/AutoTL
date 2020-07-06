@@ -9,6 +9,9 @@ Soubory přebírá ze složky Input_TXT a vyplněné listy uloží do složky Ou
 Šablony pro vyplnění jsou uloženy ve složce Data/Templates. Množství nastavení (zkratky poznámek,
 adresy buněk pro vyplnění, výchozí hodnoty atd.) lze upravit v Data/Config.ini.
 
+Ve složce Input_TXT je umístěn vzorový soubor markerů.
+Ve složce Output je excelová tabulka vytvořená ze vzorového souboru.
+
 ## Funkce:
 
 ### Soubor markerů:
